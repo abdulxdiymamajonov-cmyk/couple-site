@@ -1,0 +1,11 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Katta rasm/video POST uchun body limitini oshirish
+[functions."send"]
+  # Netlify Functions default: ~6MB body limit; katta media uchun oshirilgan
+  included_files = []
