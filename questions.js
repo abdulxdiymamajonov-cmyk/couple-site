@@ -126,7 +126,7 @@ window.QUESTIONS = [
   {
     type: "upload_video",
     question: "BU YERGA SAVOL YOZING",        // masalan: "MEN UCHUN QISQA VIDEO YUBOR"
-    hint: "Bosib video tanlang (maks. 4MB)",
+    hint: "Bosib video tanlang (maks. 1 daqiqa)",
     nextText: "TUGATISH",
     skipText: "YO'Q, VIDEO HAM JOYLAMAYMAN",
     tooBigText: "Video juda katta, qisqaroq video tanlang",

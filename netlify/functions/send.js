@@ -3,13 +3,24 @@
 // Environment variables (Netlify dashboard yoki .env):
 //   TELEGRAM_BOT_TOKEN
 //   TELEGRAM_CHAT_ID
+//   SUPABASE_URL              (video uchun)
+//   SUPABASE_SERVICE_ROLE_KEY (video uchun, faqat server tomonda!)
 // =========================================================
 
 const Busboy = require("busboy");
+const { createClient } = require("@supabase/supabase-js");
 
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TG_CHAT  = process.env.TELEGRAM_CHAT_ID || "";
 const TG_API   = `https://api.telegram.org/bot${TG_TOKEN}`;
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPABASE_BUCKET = "couple-media";
+
+function tokenPreview() {
+  if (!TG_TOKEN) return "(bo'sh)";
+  return TG_TOKEN.slice(0, 4) + "..." + TG_TOKEN.slice(-3);
+}
 
 function tashkentTime() {
   try {
@@ -27,8 +38,21 @@ function tgEscape(str) {
   return String(str == null ? "" : str);
 }
 
+function logTgResult(action, result) {
+  if (!result || result.ok !== true) {
+    console.error(`[telegram] ${action} FAILED (token=${tokenPreview()}, chat=${TG_CHAT || "(bo'sh)"}):`,
+      result && (result.description || result.error) || "no response");
+  } else {
+    console.log(`[telegram] ${action} ok`);
+  }
+}
+
 async function tgSendMessage(text) {
-  if (!TG_TOKEN || !TG_CHAT) return { ok: false, error: "missing token/chat" };
+  if (!TG_TOKEN || !TG_CHAT) {
+    const r = { ok: false, description: "TELEGRAM_BOT_TOKEN yoki TELEGRAM_CHAT_ID env o'zgaruvchisi yo'q" };
+    logTgResult("sendMessage", r);
+    return r;
+  }
   try {
     const res = await fetch(`${TG_API}/sendMessage`, {
       method: "POST",
@@ -40,14 +64,22 @@ async function tgSendMessage(text) {
         disable_web_page_preview: true
       })
     });
-    return await res.json();
+    const j = await res.json();
+    logTgResult("sendMessage", j);
+    return j;
   } catch (err) {
-    return { ok: false, error: String(err) };
+    const r = { ok: false, description: String(err) };
+    logTgResult("sendMessage", r);
+    return r;
   }
 }
 
 async function tgSendMedia(kind, buffer, filename, caption, contentType) {
-  if (!TG_TOKEN || !TG_CHAT) return { ok: false, error: "missing token/chat" };
+  if (!TG_TOKEN || !TG_CHAT) {
+    const r = { ok: false, description: "TELEGRAM_BOT_TOKEN yoki TELEGRAM_CHAT_ID env o'zgaruvchisi yo'q" };
+    logTgResult("sendMedia", r);
+    return r;
+  }
   const method = kind === "photo" ? "sendPhoto" : "sendVideo";
   const field  = kind === "photo" ? "photo" : "video";
 
@@ -87,14 +119,42 @@ async function tgSendMedia(kind, buffer, filename, caption, contentType) {
       },
       body
     });
-    return await res.json();
+    const j = await res.json();
+    logTgResult(method, j);
+    return j;
   } catch (err) {
-    return { ok: false, error: String(err) };
+    const r = { ok: false, description: String(err) };
+    logTgResult(method, r);
+    return r;
+  }
+}
+
+async function tgSendVideoUrl(url, caption) {
+  if (!TG_TOKEN || !TG_CHAT) {
+    return { ok: false, description: "TELEGRAM_BOT_TOKEN yoki TELEGRAM_CHAT_ID env o'zgaruvchisi yo'q" };
+  }
+  try {
+    const res = await fetch(`${TG_API}/sendVideo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TG_CHAT,
+        video: url,
+        caption: caption || "",
+        parse_mode: "HTML",
+        supports_streaming: true
+      })
+    });
+    const j = await res.json();
+    logTgResult("sendVideo(url)", j);
+    return j;
+  } catch (err) {
+    return { ok: false, description: String(err) };
   }
 }
 
 // -----------------------
-// Multipart parsing (rasm/video uchun)
+// Multipart parsing (rasm uchun)
 // -----------------------
 function parseMultipart(event) {
   return new Promise((resolve, reject) => {
@@ -146,9 +206,14 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: cors, body: JSON.stringify({ ok: false, error: "method not allowed" }) };
   }
 
+  // env sanity log
+  if (!TG_TOKEN || !TG_CHAT) {
+    console.error(`[send] Env yo'q: TELEGRAM_BOT_TOKEN=${TG_TOKEN ? "bor" : "YO'Q"}, TELEGRAM_CHAT_ID=${TG_CHAT ? "bor" : "YO'Q"}`);
+  }
+
   const ct = (event.headers && (event.headers["content-type"] || event.headers["Content-Type"])) || "";
 
-  // ---- Multipart (media) ----
+  // ---- Multipart (rasm) ----
   if (ct.includes("multipart/form-data")) {
     try {
       const parsed = await parseMultipart(event);
@@ -160,7 +225,7 @@ exports.handler = async (event) => {
       const sid = tgEscape(parsed.fields.sessionId || "");
       const caption = `📨 <b>Media (${kind})</b>\n❓ ${question}\n🕒 ${tashkentTime()}\n🧾 ${sid}`;
       const result = await tgSendMedia(kind, parsed.fileBuf, parsed.fileName, caption, parsed.fileType);
-      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: !!result.ok, result }) };
+      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: !!result.ok, tg: result }) };
     } catch (err) {
       return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: false, error: String(err) }) };
     }
@@ -175,8 +240,8 @@ exports.handler = async (event) => {
 
   try {
     if (payload.type === "visit") {
-      await tgSendMessage(`🔔 <b>Kimdir saytni ochdi</b>\n🕒 ${time}\n🧾 ${sid}`);
-      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: true }) };
+      const r = await tgSendMessage(`🔔 <b>Kimdir saytni ochdi</b>\n🕒 ${time}\n🧾 ${sid}`);
+      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: !!r.ok, tg: r }) };
     }
 
     if (payload.type === "answer") {
@@ -186,8 +251,39 @@ exports.handler = async (event) => {
         `❓ <b>${q}</b>\n` +
         `💬 ${a}\n` +
         `🕒 ${time}\n🧾 ${sid}`;
-      await tgSendMessage(text);
-      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: true }) };
+      const r = await tgSendMessage(text);
+      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: !!r.ok, tg: r }) };
+    }
+
+    if (payload.type === "video_from_storage") {
+      // Frontend Supabase'ga yukladi, endi bizga path yubordi.
+      // Signed download URL yaratamiz va Telegramga uzatamiz.
+      const filePath = String(payload.path || "");
+      const question = tgEscape(payload.question || "");
+      if (!filePath) {
+        return { statusCode: 400, headers: cors, body: JSON.stringify({ ok: false, error: "no path" }) };
+      }
+      if (!SUPABASE_URL || !SUPABASE_KEY) {
+        console.error("[send] SUPABASE_URL/SERVICE_ROLE_KEY env yo'q");
+        return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: "supabase env missing" }) };
+      }
+      const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
+      const yearSeconds = 60 * 60 * 24 * 365;
+      const signed = await supabase.storage.from(SUPABASE_BUCKET).createSignedUrl(filePath, yearSeconds);
+      if (signed.error || !signed.data || !signed.data.signedUrl) {
+        console.error("[send] signed url xato:", signed.error && signed.error.message);
+        return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: "signed url failed" }) };
+      }
+      const url = signed.data.signedUrl;
+      const caption = `📨 <b>Media (video)</b>\n❓ ${question}\n🕒 ${time}\n🧾 ${sid}`;
+
+      let r = await tgSendVideoUrl(url, caption);
+      if (!r || !r.ok) {
+        // Fallback: matn shaklida link
+        const fallback = `🎥 <b>Video</b>\n❓ ${question}\n🕒 ${time}\n🧾 ${sid}\n\n<a href="${url}">Videoni ochish</a>`;
+        r = await tgSendMessage(fallback);
+      }
+      return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: !!r.ok, tg: r }) };
     }
 
     if (payload.type === "summary") {
@@ -220,6 +316,7 @@ exports.handler = async (event) => {
 
     return { statusCode: 400, headers: cors, body: JSON.stringify({ ok: false, error: "unknown type" }) };
   } catch (err) {
+    console.error("[send] handler error:", err);
     return { statusCode: 200, headers: cors, body: JSON.stringify({ ok: false, error: String(err) }) };
   }
 };

@@ -506,6 +506,11 @@
       input.addEventListener("change", async (e) => {
         const f = e.target.files && e.target.files[0];
         if (!f) return;
+        if (!f.type || !f.type.startsWith("image/")) {
+          toast("Bu yerga faqat rasm yuklang", 3500);
+          input.value = "";
+          return;
+        }
         try {
           const blob = await compressImage(f, 1600, 0.8);
           chosenBlob = blob;
@@ -541,6 +546,160 @@
     });
   }
 
+  // Video metadata olish
+  function loadVideoMeta(file) {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.muted = true;
+      v.playsInline = true;
+      const url = URL.createObjectURL(file);
+      v.onloadedmetadata = () => {
+        const info = {
+          duration: v.duration,
+          width: v.videoWidth,
+          height: v.videoHeight,
+          url
+        };
+        resolve(info);
+      };
+      v.onerror = () => { URL.revokeObjectURL(url); reject(new Error("video metadata error")); };
+      v.src = url;
+    });
+  }
+
+  function mediaRecorderSupported() {
+    try {
+      if (typeof MediaRecorder === "undefined") return false;
+      const canvas = document.createElement("canvas");
+      if (typeof canvas.captureStream !== "function") return false;
+      const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
+      return types.some((t) => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+    } catch (e) { return false; }
+  }
+
+  function pickRecorderMime() {
+    const types = ["video/webm;codecs=vp8,opus", "video/webm;codecs=vp9,opus", "video/webm"];
+    for (const t of types) {
+      if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return "video/webm";
+  }
+
+  // 720p ga kichraytirib qayta kodlash. Audio saqlanadi.
+  function compressVideo(file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement("video");
+      video.src = URL.createObjectURL(file);
+      video.muted = false;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      video.onerror = () => { URL.revokeObjectURL(video.src); reject(new Error("video yuklab bo'lmadi")); };
+      video.onloadedmetadata = async () => {
+        try {
+          const maxDim = 720;
+          let w = video.videoWidth || 640;
+          let h = video.videoHeight || 480;
+          if (w > maxDim || h > maxDim) {
+            if (w >= h) { h = Math.round(h * maxDim / w); w = maxDim; }
+            else { w = Math.round(w * maxDim / h); h = maxDim; }
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          const canvasStream = canvas.captureStream(30);
+
+          let combined = canvasStream;
+          try {
+            const src = video.captureStream ? video.captureStream()
+              : (video.mozCaptureStream ? video.mozCaptureStream() : null);
+            if (src) {
+              const audio = src.getAudioTracks();
+              if (audio && audio.length) {
+                combined = new MediaStream([...canvasStream.getVideoTracks(), audio[0]]);
+              }
+            }
+          } catch (e) { /* audio ilinmasa ham davom */ }
+
+          const mimeType = pickRecorderMime();
+          const recorder = new MediaRecorder(combined, {
+            mimeType,
+            videoBitsPerSecond: 2500000,
+            audioBitsPerSecond: 128000
+          });
+          const chunks = [];
+          let stopped = false;
+          recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+          recorder.onstop = () => {
+            if (stopped) return;
+            stopped = true;
+            URL.revokeObjectURL(video.src);
+            const blob = new Blob(chunks, { type: mimeType });
+            resolve(blob);
+          };
+          recorder.onerror = (e) => reject(e.error || new Error("recorder xatosi"));
+
+          video.currentTime = 0;
+          try { await video.play(); } catch (e) { /* iOS avtoplay */ }
+          recorder.start(500);
+
+          const draw = () => {
+            if (video.ended || video.paused) return;
+            try { ctx.drawImage(video, 0, 0, w, h); } catch (e) {}
+            if (onProgress && video.duration) onProgress(Math.min(1, video.currentTime / video.duration));
+            requestAnimationFrame(draw);
+          };
+          requestAnimationFrame(draw);
+
+          video.onended = () => {
+            if (onProgress) onProgress(1);
+            setTimeout(() => { try { recorder.stop(); } catch (e) {} }, 250);
+          };
+        } catch (err) { reject(err); }
+      };
+    });
+  }
+
+  // Signed upload URL orqali to'g'ridan-to'g'ri Supabase'ga PUT
+  function uploadToSignedUrl(signedUrl, blob, contentType, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", signedUrl);
+      xhr.setRequestHeader("Content-Type", contentType || "application/octet-stream");
+      xhr.setRequestHeader("x-upsert", "true");
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject(new Error("upload xatosi: " + xhr.status + " " + xhr.responseText.slice(0, 200)));
+      };
+      xhr.onerror = () => reject(new Error("tarmoq xatosi"));
+      xhr.send(blob);
+    });
+  }
+
+  async function getSignedUploadUrl(filename, mime) {
+    const res = await fetch("/.netlify/functions/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename, mime })
+    });
+    const j = await res.json();
+    if (!j || !j.ok) throw new Error((j && j.error) || "signed url olinmadi");
+    return j; // {ok, path, signedUrl, token, bucket}
+  }
+
+  async function notifyVideoUploaded(path, questionText) {
+    const res = await fetch("/.netlify/functions/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "video_from_storage", path, question: questionText, sessionId })
+    });
+    return await res.json().catch(() => ({}));
+  }
+
   function renderUploadVideo(q) {
     showScreen((s) => {
       const title = document.createElement("h2");
@@ -552,7 +711,7 @@
       zone.className = "upload";
       zone.innerHTML = `
         <div class="upload__icon">🎬</div>
-        <div class="upload__hint">${q.hint || "Bosib video tanlang (maks. 4MB)"}</div>
+        <div class="upload__hint">${q.hint || "Bosib video tanlang (maks. 1 daqiqa)"}</div>
         <div class="upload__preview"></div>
         <input type="file" accept="video/*" />
       `;
@@ -568,11 +727,14 @@
       actions.className = "actions";
       s.appendChild(actions);
 
-      const loader = document.createElement("div");
-      loader.className = "loader";
-      loader.style.display = "none";
-      loader.innerHTML = `<span class="dot"></span><span class="dot"></span><span class="dot"></span><span>${q.uploadingText || "Yuborilyapti..."}</span>`;
-      actions.appendChild(loader);
+      const progressWrap = document.createElement("div");
+      progressWrap.className = "upload__progress";
+      progressWrap.innerHTML = `<div class="upload__progress__bar"></div>`;
+      actions.appendChild(progressWrap);
+
+      const status = document.createElement("div");
+      status.className = "upload__status";
+      actions.appendChild(status);
 
       const nextBtn = document.createElement("button");
       nextBtn.type = "button";
@@ -587,37 +749,126 @@
       skipBtn.textContent = q.skipText || "YO'Q, VIDEO HAM JOYLAMAYMAN";
       actions.appendChild(skipBtn);
 
-      input.addEventListener("change", (e) => {
+      const progressBarEl = progressWrap.querySelector(".upload__progress__bar");
+      function setProgress(label, fraction) {
+        if (label) status.textContent = label;
+        if (typeof fraction === "number") {
+          progressWrap.classList.add("show");
+          progressBarEl.style.width = Math.max(0, Math.min(100, fraction * 100)).toFixed(1) + "%";
+        }
+      }
+      function clearProgress() {
+        progressWrap.classList.remove("show");
+        status.textContent = "";
+        progressBarEl.style.width = "0%";
+      }
+
+      input.addEventListener("change", async (e) => {
         const f = e.target.files && e.target.files[0];
         if (!f) return;
-        if (f.size > 4 * 1024 * 1024) {
-          toast(q.tooBigText || "Video juda katta, qisqaroq video tanlang", 3500);
+        if (!f.type || !f.type.startsWith("video/")) {
+          toast("Bu yerga faqat video yuklang", 3500);
           input.value = "";
           return;
         }
-        chosenFile = f;
-        preview.innerHTML = "";
-        const v = document.createElement("video");
-        v.src = URL.createObjectURL(f);
-        v.controls = true;
-        v.playsInline = true;
-        v.muted = true;
-        preview.appendChild(v);
-        preview.classList.add("show");
-        iconEl.style.display = "none";
-        hintEl.style.display = "none";
-        nextBtn.disabled = false;
+        // Katta hajm cheklovi
+        if (f.size > 200 * 1024 * 1024) {
+          toast("Video juda katta (200MB dan oshgan)", 3500);
+          input.value = "";
+          return;
+        }
+        try {
+          const meta = await loadVideoMeta(f);
+          if (meta.duration && meta.duration > 60.5) {
+            toast("Video 1 daqiqadan oshmasin", 3500);
+            input.value = "";
+            URL.revokeObjectURL(meta.url);
+            return;
+          }
+          chosenFile = f;
+          preview.innerHTML = "";
+          const v = document.createElement("video");
+          v.src = meta.url;
+          v.controls = true;
+          v.playsInline = true;
+          v.muted = true;
+          preview.appendChild(v);
+          preview.classList.add("show");
+          iconEl.style.display = "none";
+          hintEl.style.display = "none";
+          nextBtn.disabled = false;
+          clearProgress();
+        } catch (err) {
+          toast("Videoni o'qib bo'lmadi");
+        }
       });
 
       nextBtn.addEventListener("click", async () => {
         if (!chosenFile) return;
-        loader.style.display = "flex";
         nextBtn.disabled = true;
         skipBtn.disabled = true;
+        input.disabled = true;
+
+        let toUpload = chosenFile;
+        let uploadType = chosenFile.type || "video/mp4";
+        let uploadName = chosenFile.name || "video.mp4";
+
         try {
-          await sendMedia("video", chosenFile, q.question || "", chosenFile.name || "video.mp4");
+          // 20MB dan katta bo'lsa siqishga urinamiz
+          if (chosenFile.size > 20 * 1024 * 1024) {
+            if (mediaRecorderSupported()) {
+              setProgress("Video tayyorlanmoqda...", 0);
+              try {
+                const compressed = await compressVideo(chosenFile, (frac) => {
+                  setProgress("Video tayyorlanmoqda...", frac);
+                });
+                toUpload = compressed;
+                uploadType = compressed.type || "video/webm";
+                uploadName = (chosenFile.name || "video").replace(/\.[^.]+$/, "") + ".webm";
+              } catch (e) {
+                console.warn("compress err", e);
+                // Siqib bo'lmasa original bilan davom (50MB gacha ruxsat)
+                if (chosenFile.size > 50 * 1024 * 1024) {
+                  toast("Video juda katta, siqib ham bo'lmadi", 3800);
+                  nextBtn.disabled = false;
+                  skipBtn.disabled = false;
+                  input.disabled = false;
+                  clearProgress();
+                  return;
+                }
+              }
+            } else {
+              // Brauzer MediaRecorder'ni qo'llamasa, original 50MB gacha
+              if (chosenFile.size > 50 * 1024 * 1024) {
+                toast("Brauzer video siqishni qo'llamaydi (fayl > 50MB)", 3800);
+                nextBtn.disabled = false;
+                skipBtn.disabled = false;
+                input.disabled = false;
+                return;
+              }
+            }
+          }
+
+          setProgress("Yuklanmoqda...", 0);
+          const info = await getSignedUploadUrl(uploadName, uploadType);
+          await uploadToSignedUrl(info.signedUrl, toUpload, uploadType, (frac) => {
+            setProgress("Yuklanmoqda...", frac);
+          });
+          setProgress("Botga yuborilyapti...", 1);
+          const res = await notifyVideoUploaded(info.path, q.question || "");
+          if (!res || res.ok === false) {
+            toast("Yuborildi (lekin botga yetkazishda muammo bor)", 3500);
+          }
           answers.push({ q: q.question, a: "[video yuborildi]" });
-        } catch (e) {}
+        } catch (err) {
+          console.warn("video upload err", err);
+          toast("Video yuborishda xato: " + (err && err.message || err), 4200);
+          nextBtn.disabled = false;
+          skipBtn.disabled = false;
+          input.disabled = false;
+          clearProgress();
+          return;
+        }
         nextQuestion();
       });
 
