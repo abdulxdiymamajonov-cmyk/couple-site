@@ -354,6 +354,10 @@
       noBtn.type = "button";
       noBtn.className = "btn btn--no btn--runaway";
       noBtn.textContent = q.noText || "YO'Q";
+      // Boshidanoq absolute joyda, "Ha"ning ostida
+      noBtn.style.left = "50%";
+      noBtn.style.top = "150px";
+      noBtn.style.marginLeft = "-65px"; // yarim eni (130 / 2)
       arena.appendChild(noBtn);
 
       // "Ha" atrofida SAFE_PAD px zona bo'sh qolsin
@@ -373,24 +377,23 @@
         const maxLeft = Math.max(0, arenaRect.width - w - 4);
         const maxTop  = Math.max(0, arenaRect.height - h - 4);
 
-        for (let tries = 0; tries < 50; tries++) {
+        for (let tries = 0; tries < 60; tries++) {
           const left = Math.random() * maxLeft;
           const top  = Math.random() * maxTop;
           const nx1 = left, ny1 = top, nx2 = left + w, ny2 = top + h;
           const overlap = !(nx2 < yLeft || nx1 > yRight || ny2 < yTop || ny1 > yBottom);
           if (!overlap) {
+            noBtn.style.marginLeft = "0";
             noBtn.style.left = left + "px";
             noBtn.style.top = top + "px";
             return;
           }
         }
-        // Fallback: yuqori burchak (Ha esa markazda, shuning uchun burchak xavfsiz)
+        // Fallback: pastki burchak
+        noBtn.style.marginLeft = "0";
         noBtn.style.left = "4px";
-        noBtn.style.top  = "4px";
+        noBtn.style.top  = Math.max(0, arenaRect.height - h - 4) + "px";
       }
-
-      setTimeout(positionNoRandom, 100);
-      window.addEventListener("resize", positionNoRandom);
 
       let runCount = 0;
       let lastRun = 0;
@@ -406,9 +409,13 @@
       // FAQAT "Yo'q" elementiga bog'lanadi — konteynerga yoki document'ga emas
       noBtn.addEventListener("mouseenter", runAway);
       noBtn.addEventListener("pointerenter", runAway);
+      noBtn.addEventListener("pointerdown", runAway);
       noBtn.addEventListener("focus", runAway);
       noBtn.addEventListener("touchstart", runAway, { passive: false });
       noBtn.addEventListener("click", (e) => { e.preventDefault(); runAway(e); });
+
+      // Resize da qayta joylash — lekin dastlab arena joylashguncha kutamiz
+      window.addEventListener("resize", () => { setTimeout(positionNoRandom, 30); });
 
       const flower = document.createElement("div");
       flower.className = "flower-wrap";

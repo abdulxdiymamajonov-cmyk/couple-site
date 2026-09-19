@@ -116,7 +116,7 @@ window.QUESTIONS = [
   // ----- 13-ekran: rasm yuklash -----
   {
     type: "upload_image",
-    question: "Men uchun bitta selfie(o'zingni tasmingni) joylay olasanmi?",        // masalan: "O'ZINGNING ENG YAXSHI RASMINGNI JOYLA"
+    question: "Men uchun bitta selfie(o'zingni rasmingni) joylay olasanmi?",        // masalan: "O'ZINGNING ENG YAXSHI RASMINGNI JOYLA"
     hint: "Bosib rasm tanlang",
     nextText: "BU rasm chiroylimi?",
     skipText: "YO'Q, RASM JOYLAMAYMAN"
@@ -138,6 +138,6 @@ window.QUESTIONS = [
     type: "final",
     // Typewriter bilan chiqadigan yakuniy matn.
     // Yangi qatorlar uchun \n ishlating.
-    finalText: "MEN JUDA HAM QATTIQ SENI SEVAMAN 💗"
+    finalText: "MEN SENI JUDA HAM QATTIQ SEVAMAN 💗"
   }
 ];
