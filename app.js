@@ -354,9 +354,9 @@
       noBtn.type = "button";
       noBtn.className = "btn btn--no btn--runaway";
       noBtn.textContent = q.noText || "YO'Q";
-      // Boshidanoq absolute joyda, "Ha"ning ostida
+      // Boshidanoq absolute joyda, "Ha"ning ostida (nisbiy, kichik ekranlarga moslashadi)
       noBtn.style.left = "50%";
-      noBtn.style.top = "150px";
+      noBtn.style.bottom = "8px";
       noBtn.style.marginLeft = "-65px"; // yarim eni (130 / 2)
       arena.appendChild(noBtn);
 
@@ -384,6 +384,7 @@
           const overlap = !(nx2 < yLeft || nx1 > yRight || ny2 < yTop || ny1 > yBottom);
           if (!overlap) {
             noBtn.style.marginLeft = "0";
+            noBtn.style.bottom = "auto";
             noBtn.style.left = left + "px";
             noBtn.style.top = top + "px";
             return;
@@ -391,6 +392,7 @@
         }
         // Fallback: pastki burchak
         noBtn.style.marginLeft = "0";
+        noBtn.style.bottom = "auto";
         noBtn.style.left = "4px";
         noBtn.style.top  = Math.max(0, arenaRect.height - h - 4) + "px";
       }
