@@ -46,7 +46,22 @@ exports.handler = async (event) => {
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: false } });
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+
+    // Bucket yo'q bo'lsa yaratamiz (private, 50MB limit)
+    let attempt = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+    if (attempt.error && /not found|bucket/i.test(attempt.error.message || "")) {
+      console.log("[upload-url] bucket topilmadi, yaratilyapti:", BUCKET);
+      const created = await supabase.storage.createBucket(BUCKET, {
+        public: false,
+        fileSizeLimit: 52428800 // 50 MB
+      });
+      if (created.error && !/already exists/i.test(created.error.message || "")) {
+        console.error("[upload-url] createBucket error:", created.error.message);
+        return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: created.error.message }) };
+      }
+      attempt = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+    }
+    const { data, error } = attempt;
     if (error || !data) {
       console.error("[upload-url] createSignedUploadUrl error:", error && error.message);
       return { statusCode: 500, headers: cors, body: JSON.stringify({ ok: false, error: (error && error.message) || "signed upload url failed" }) };

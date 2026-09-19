@@ -145,15 +145,24 @@
       noBtn.textContent = q.noText || "YO'Q";
 
       let noScale = 1;
-      let yesScale = 1;
       let noClicks = 0;
+
+      function safeVibrate(ms) {
+        try { if (navigator && typeof navigator.vibrate === "function") navigator.vibrate(ms); } catch (e) {}
+      }
 
       noBtn.addEventListener("click", () => {
         noClicks++;
         noScale *= 0.85;
-        yesScale *= 1.08;
         noBtn.style.transform = `scale(${noScale})`;
-        yesBtn.style.transform = `scale(${Math.min(yesScale, 1.5)})`;
+
+        // "Ha" — o'lchami o'zgarmasin, faqat shake
+        yesBtn.classList.remove("btn--shake");
+        // reflow — animatsiya qaytadan yugurishi uchun
+        void yesBtn.offsetWidth;
+        yesBtn.classList.add("btn--shake");
+        safeVibrate(200);
+
         if (q.shrinkNote) note.classList.add("show");
         if (noClicks >= 6 || noScale < 0.15) {
           noBtn.style.transition = "opacity 0.4s ease, transform 0.4s ease";
@@ -347,51 +356,59 @@
       noBtn.textContent = q.noText || "YO'Q";
       arena.appendChild(noBtn);
 
-      // Boshlang'ich joylashuv
+      // "Ha" atrofida SAFE_PAD px zona bo'sh qolsin
+      const SAFE_PAD = 40;
+
       function positionNoRandom() {
-        const rect = arena.getBoundingClientRect();
+        const arenaRect = arena.getBoundingClientRect();
         const w = noBtn.offsetWidth || 130;
         const h = noBtn.offsetHeight || 60;
         const yesRect = yesBtn.getBoundingClientRect();
-        const arenaRect = arena.getBoundingClientRect();
+        // "Ha" ning arena ichidagi koordinatasi
+        const yLeft   = yesRect.left - arenaRect.left - SAFE_PAD;
+        const yRight  = yesRect.right - arenaRect.left + SAFE_PAD;
+        const yTop    = yesRect.top - arenaRect.top - SAFE_PAD;
+        const yBottom = yesRect.bottom - arenaRect.top + SAFE_PAD;
 
-        let tries = 0;
-        while (tries < 30) {
-          const left = Math.random() * (rect.width - w - 8);
-          const top = Math.random() * (rect.height - h - 8);
-          // "Ha" bilan to'qnashmaslik uchun tekshir
-          const nx1 = arenaRect.left + left;
-          const ny1 = arenaRect.top + top;
-          const nx2 = nx1 + w;
-          const ny2 = ny1 + h;
-          const overlap = !(nx2 < yesRect.left - 10 || nx1 > yesRect.right + 10 || ny2 < yesRect.top - 10 || ny1 > yesRect.bottom + 10);
+        const maxLeft = Math.max(0, arenaRect.width - w - 4);
+        const maxTop  = Math.max(0, arenaRect.height - h - 4);
+
+        for (let tries = 0; tries < 50; tries++) {
+          const left = Math.random() * maxLeft;
+          const top  = Math.random() * maxTop;
+          const nx1 = left, ny1 = top, nx2 = left + w, ny2 = top + h;
+          const overlap = !(nx2 < yLeft || nx1 > yRight || ny2 < yTop || ny1 > yBottom);
           if (!overlap) {
             noBtn.style.left = left + "px";
             noBtn.style.top = top + "px";
             return;
           }
-          tries++;
         }
-        // fallback
-        noBtn.style.left = (rect.width - w - 8) + "px";
-        noBtn.style.top = "8px";
+        // Fallback: yuqori burchak (Ha esa markazda, shuning uchun burchak xavfsiz)
+        noBtn.style.left = "4px";
+        noBtn.style.top  = "4px";
       }
 
       setTimeout(positionNoRandom, 100);
+      window.addEventListener("resize", positionNoRandom);
 
       let runCount = 0;
+      let lastRun = 0;
       function runAway(ev) {
-        if (ev) ev.preventDefault();
+        // Ko'p hodisalar bir-birining ustidan chiqmasin
+        const now = Date.now();
+        if (now - lastRun < 60) return;
+        lastRun = now;
+        if (ev && ev.cancelable) ev.preventDefault();
         runCount++;
         positionNoRandom();
       }
-      // Desktop
-      noBtn.addEventListener("mouseover", runAway);
+      // FAQAT "Yo'q" elementiga bog'lanadi — konteynerga yoki document'ga emas
+      noBtn.addEventListener("mouseenter", runAway);
+      noBtn.addEventListener("pointerenter", runAway);
       noBtn.addEventListener("focus", runAway);
-      // Mobil
       noBtn.addEventListener("touchstart", runAway, { passive: false });
-      noBtn.addEventListener("pointerdown", runAway);
-      noBtn.addEventListener("click", (e) => e.preventDefault());
+      noBtn.addEventListener("click", (e) => { e.preventDefault(); runAway(e); });
 
       const flower = document.createElement("div");
       flower.className = "flower-wrap";
@@ -532,11 +549,21 @@
         loader.style.display = "flex";
         nextBtn.disabled = true;
         skipBtn.disabled = true;
+        let res = null;
         try {
-          await sendMedia("photo", chosenBlob, q.question || "", "photo.jpg");
+          res = await sendMedia("photo", chosenBlob, q.question || "", "photo.jpg");
+        } catch (e) { res = null; }
+        loader.style.display = "none";
+        if (res && res.ok === true) {
           answers.push({ q: q.question, a: "[rasm yuborildi]" });
-        } catch (e) {}
-        nextQuestion();
+          nextQuestion();
+        } else {
+          const desc = (res && res.tg && (res.tg.description || res.tg.error)) || (res && res.error) || "nomalum xato";
+          toast("Yuklashda xatolik, qayta urinib ko'ring. (" + desc + ")", 4200);
+          nextBtn.disabled = false;
+          skipBtn.disabled = false;
+          nextBtn.textContent = "QAYTA YUBORISH";
+        }
       });
 
       skipBtn.addEventListener("click", () => {
@@ -856,16 +883,23 @@
           });
           setProgress("Botga yuborilyapti...", 1);
           const res = await notifyVideoUploaded(info.path, q.question || "");
-          if (!res || res.ok === false) {
-            toast("Yuborildi (lekin botga yetkazishda muammo bor)", 3500);
+          if (!res || res.ok !== true) {
+            const desc = (res && res.tg && (res.tg.description || res.tg.error)) || (res && res.error) || "botga yetkazib bo'lmadi";
+            toast("Yuklashda xatolik, qayta urinib ko'ring. (" + desc + ")", 4500);
+            nextBtn.disabled = false;
+            skipBtn.disabled = false;
+            input.disabled = false;
+            nextBtn.textContent = "QAYTA YUBORISH";
+            return;
           }
           answers.push({ q: q.question, a: "[video yuborildi]" });
         } catch (err) {
           console.warn("video upload err", err);
-          toast("Video yuborishda xato: " + (err && err.message || err), 4200);
+          toast("Yuklashda xatolik, qayta urinib ko'ring. (" + (err && err.message || err) + ")", 4500);
           nextBtn.disabled = false;
           skipBtn.disabled = false;
           input.disabled = false;
+          nextBtn.textContent = "QAYTA YUBORISH";
           clearProgress();
           return;
         }

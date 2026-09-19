@@ -224,6 +224,16 @@ body {
   background: #fff;
   color: #b3153f;
 }
+
+.btn--shake {
+  animation: yesShake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@keyframes yesShake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-8px); }
+  40%, 60% { transform: translateX(8px); }
+}
 .btn--no {
   background: rgba(255,255,255,0.15);
   color: #fff;
@@ -348,6 +358,7 @@ body {
   position: absolute;
   width: 130px;
   transition: left 0.18s ease, top 0.18s ease, transform 0.15s ease;
+  z-index: 1;
 }
 .btn--yes-anchor {
   position: absolute;
@@ -355,6 +366,7 @@ body {
   top: 40%;
   transform: translate(-50%, -50%);
   width: 180px;
+  z-index: 5;
 }
 
 /* Flower final for runaway */

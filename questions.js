@@ -14,7 +14,7 @@ window.QUESTIONS = [
   // ----- 1-ekran: HA/YO'Q, YO'Q kichrayib boradi -----
   {
     type: "yesno_shrink",
-    question: "BU YERGA SAVOL YOZING",       // masalan: "MENI SEVASANMI?"
+    question: "Meni sevasanmi?",       // masalan: "MENI SEVASANMI?"
     yesText: "HA, JUDA HAM",                 // "Ha" button matni
     noText: "YO'Q",                          // "Yo'q" button matni
     shrinkNote: ""                           // bo'sh qoldirilsa hech narsa chiqmaydi
@@ -26,14 +26,14 @@ window.QUESTIONS = [
     question: "QANCHALIK?",
     options: ["Ozgina", "O'rtacha", "Ko'p", "Juda ham", "Bor vujudim bilan"],
     // Har qanday variant tanlansa ham pastda shu matn typewriter effekti bilan chiqadi:
-    afterText: "BU YERGA JAVOB YOZUVINI YOZING", // masalan: "MEN SENI UNDAN KO'PROQ SEVAMAN 💗"
+    afterText: "MEN SENI UNDAN KO'PROQ SEVAMAN 💗", // masalan: "MEN SENI UNDAN KO'PROQ SEVAMAN 💗"
     nextText: "Keyingi"
   },
 
   // ----- 3-ekran: matnli javob -----
   {
     type: "text",
-    question: "BU YERGA SAVOL YOZING",        // masalan: "MEN SENGA NIMA UCHUN YOQAMAN?"
+    question: "Senga meni nimam ko'proq yoqadi?, faqat ochiq gapir!",        // masalan: "MEN SENGA NIMA UCHUN YOQAMAN?"
     placeholder: "Bu yerga yozing...",
     nextText: "Keyingi"
   },
@@ -41,7 +41,7 @@ window.QUESTIONS = [
   // ----- 4-ekran: matnli javob -----
   {
     type: "text",
-    question: "BU YERGA SAVOL YOZING",        // masalan: "MENDA SENGA NIMA YOQADI?"
+    question: "Men senga qachondan beri yoqaman?",        // masalan: "MENDA SENGA NIMA YOQADI?"
     placeholder: "Bu yerga yozing...",
     nextText: "Keyingi"
   },
@@ -98,7 +98,7 @@ window.QUESTIONS = [
   // ----- 11-ekran: HA/YO'Q + kichrayadi + eslatma -----
   {
     type: "yesno_shrink",
-    question: "BU YERGA SAVOL YOZING",        // masalan: "MENGA HIS QILGAN TUYG'ULARING BORMI?"
+    question: "Hech kimga aytmagan siring bormi?",        // masalan: "MENGA HIS QILGAN TUYG'ULARING BORMI?"
     yesText: "HA",
     noText: "YO'Q",
     shrinkNote: "ESLAB KO'R, BALKI BORDIR 🤔" // "Yo'q" bosilganda chiqadi
@@ -107,7 +107,7 @@ window.QUESTIONS = [
   // ----- 12-ekran: HA/YO'Q + YO'Q qochadi + gul -----
   {
     type: "yesno_runaway",
-    question: "BU YERGA SAVOL YOZING",        // masalan: "MEN BILAN UCHRASHASANMI?"
+    question: "Uni menga aytasanmi?",        // masalan: "MEN BILAN UCHRASHASANMI?"
     yesText: "HA",
     noText: "YO'Q",
     afterYesText: "OZGINA QOLDI 🌸"           // "Ha" bosilgach chiqadi
@@ -116,16 +116,16 @@ window.QUESTIONS = [
   // ----- 13-ekran: rasm yuklash -----
   {
     type: "upload_image",
-    question: "BU YERGA SAVOL YOZING",        // masalan: "O'ZINGNING ENG YAXSHI RASMINGNI JOYLA"
+    question: "Men uchun bitta selfie(o'zingni tasmingni) joylay olasanmi?",        // masalan: "O'ZINGNING ENG YAXSHI RASMINGNI JOYLA"
     hint: "Bosib rasm tanlang",
-    nextText: "KEYINGI SAVOL",
+    nextText: "BU rasm chiroylimi?",
     skipText: "YO'Q, RASM JOYLAMAYMAN"
   },
 
   // ----- 14-ekran: video yuklash -----
   {
     type: "upload_video",
-    question: "BU YERGA SAVOL YOZING",        // masalan: "MEN UCHUN QISQA VIDEO YUBOR"
+    question: "Hozir holatingi videoga olib va reaksiyangni aytib menga yubora olasanmi?",        // masalan: "MEN UCHUN QISQA VIDEO YUBOR"
     hint: "Bosib video tanlang (maks. 1 daqiqa)",
     nextText: "TUGATISH",
     skipText: "YO'Q, VIDEO HAM JOYLAMAYMAN",
@@ -138,6 +138,6 @@ window.QUESTIONS = [
     type: "final",
     // Typewriter bilan chiqadigan yakuniy matn.
     // Yangi qatorlar uchun \n ishlating.
-    finalText: "BU YERGA YAKUNIY MATN YOZING\nMASALAN: SENI SEVAMAN 💗"
+    finalText: "MEN JUDA HAM QATTIQ SENI SEVAMAN 💗"
   }
 ];
