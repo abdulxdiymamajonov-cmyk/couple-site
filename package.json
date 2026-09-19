@@ -1,0 +1,14 @@
+{
+  "name": "couple-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Interactive couple-style phone site. Answers go to Telegram; videos via Supabase Storage.",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo build"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.4",
+    "busboy": "^1.6.0"
+  }
+}

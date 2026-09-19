@@ -11,6 +11,7 @@ Interaktiv "couple" uslubidagi telefon uchun mo'ljallangan sayt. Javoblar Telegr
 - `netlify/functions/send.js` — Telegramga xabar / rasm / video (URL) yuborish
 - `netlify/functions/upload-url.js` — Supabase'ga to'g'ridan-to'g'ri yuklash uchun signed URL beradi
 - `netlify.toml` — Netlify sozlamalari
+- `package.json` (root) — function'lar uchun ham shu yerdagi dependencies ishlatiladi (`@supabase/supabase-js`, `busboy`). Netlify build paytida root'da `npm install` avtomatik ishlaydi.
 
 ## Sozlash
 
@@ -45,10 +46,8 @@ SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
 # Netlify CLI o'rnating (bir marta):
 npm install -g netlify-cli
 
-# Function bog'liqliklarini o'rnating:
-cd netlify/functions
+# Loyiha dependencylarini o'rnating (root'da bir marta):
 npm install
-cd ../..
 
 # Ishga tushirish:
 netlify dev
